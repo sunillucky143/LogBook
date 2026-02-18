@@ -16,7 +16,6 @@ var (
 	// Document errors
 	ErrDocumentNotFound = errors.New("document not found")
 	ErrDocumentExists   = errors.New("document already exists for this date")
-	ErrVersionNotFound  = errors.New("version not found")
 
 	// Media errors
 	ErrMediaNotFound = errors.New("media not found")

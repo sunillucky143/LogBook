@@ -128,14 +128,19 @@ export const endpoints = {
     create: '/documents',
     get: (id: string) => `/documents/${id}`,
     update: (id: string) => `/documents/${id}`,
-    versions: (id: string) => `/documents/${id}/versions`,
-    version: (id: string, version: number) => `/documents/${id}/versions/${version}`,
   },
 
   // Upload endpoints
   upload: {
     presign: '/upload/presign',
     confirm: '/upload/confirm',
+    deleteByUrl: '/upload/delete-by-url',
     media: (id: string) => `/media/${id}`,
+  },
+
+  // Feedback endpoints
+  feedback: {
+    create: '/feedback',
+    list: '/feedback',
   },
 }

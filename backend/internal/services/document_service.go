@@ -2,7 +2,6 @@ package services
 
 import (
 	"context"
-	"strconv"
 	"time"
 
 	"log_book/internal/models"
@@ -23,25 +22,22 @@ func NewDocumentService(documentRepo *repository.DocumentRepository, userRepo *r
 	}
 }
 
-func (s *DocumentService) CreateDocument(ctx context.Context, clerkID string, input models.CreateDocumentInput) (*models.DocumentWithContent, error) {
+func (s *DocumentService) CreateDocument(ctx context.Context, clerkID string, input models.CreateDocumentInput) (*models.Document, error) {
 	user, err := s.userRepo.GetByClerkID(ctx, clerkID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Parse log date
 	logDate, err := time.Parse("2006-01-02", input.LogDate)
 	if err != nil {
 		return nil, err
 	}
 
-	// Check if document exists for this date
 	existing, _ := s.documentRepo.GetByUserAndDate(ctx, user.ID, logDate)
 	if existing != nil {
 		return nil, ErrDocumentExists
 	}
 
-	// Parse session ID if provided
 	var sessionID *uuid.UUID
 	if input.SessionID != nil {
 		id, err := uuid.Parse(*input.SessionID)
@@ -51,25 +47,22 @@ func (s *DocumentService) CreateDocument(ctx context.Context, clerkID string, in
 	}
 
 	doc := &models.Document{
-		UserID:         user.ID,
-		SessionID:      sessionID,
-		LogDate:        logDate,
-		Title:          input.Title,
-		CurrentVersion: 1,
+		UserID:    user.ID,
+		SessionID: sessionID,
+		LogDate:   logDate,
+		Title:     input.Title,
+		Content:   input.Content,
 	}
 
-	err = s.documentRepo.Create(ctx, doc, input.Content)
+	err = s.documentRepo.Create(ctx, doc)
 	if err != nil {
 		return nil, err
 	}
 
-	return &models.DocumentWithContent{
-		Document: *doc,
-		Content:  input.Content,
-	}, nil
+	return doc, nil
 }
 
-func (s *DocumentService) GetDocument(ctx context.Context, clerkID string, docID string) (*models.DocumentWithContent, error) {
+func (s *DocumentService) GetDocument(ctx context.Context, clerkID string, docID string) (*models.Document, error) {
 	user, err := s.userRepo.GetByClerkID(ctx, clerkID)
 	if err != nil {
 		return nil, err
@@ -84,19 +77,10 @@ func (s *DocumentService) GetDocument(ctx context.Context, clerkID string, docID
 		return nil, ErrUnauthorized
 	}
 
-	// Get current version content
-	version, err := s.documentRepo.GetVersion(ctx, doc.ID, doc.CurrentVersion)
-	if err != nil {
-		return nil, err
-	}
-
-	return &models.DocumentWithContent{
-		Document: *doc,
-		Content:  version.Content,
-	}, nil
+	return doc, nil
 }
 
-func (s *DocumentService) UpdateDocument(ctx context.Context, clerkID string, docID string, input models.UpdateDocumentInput) (*models.DocumentWithContent, error) {
+func (s *DocumentService) UpdateDocument(ctx context.Context, clerkID string, docID string, input models.UpdateDocumentInput) (*models.Document, error) {
 	user, err := s.userRepo.GetByClerkID(ctx, clerkID)
 	if err != nil {
 		return nil, err
@@ -111,26 +95,17 @@ func (s *DocumentService) UpdateDocument(ctx context.Context, clerkID string, do
 		return nil, ErrUnauthorized
 	}
 
-	// Update title if provided
 	if input.Title != "" {
 		doc.Title = input.Title
 	}
+	doc.Content = input.Content
 
-	// Create new version
-	doc.CurrentVersion++
-
-	// Determine if this should be a full snapshot (every 10th version)
-	isFullSnapshot := doc.CurrentVersion%10 == 0
-
-	err = s.documentRepo.Update(ctx, doc, input.Content, isFullSnapshot)
+	err = s.documentRepo.Update(ctx, doc)
 	if err != nil {
 		return nil, err
 	}
 
-	return &models.DocumentWithContent{
-		Document: *doc,
-		Content:  input.Content,
-	}, nil
+	return doc, nil
 }
 
 func (s *DocumentService) ListDocuments(ctx context.Context, clerkID string, params models.DocumentListParams) ([]models.Document, int, error) {
@@ -140,52 +115,6 @@ func (s *DocumentService) ListDocuments(ctx context.Context, clerkID string, par
 	}
 
 	return s.documentRepo.ListByUser(ctx, user.ID, params)
-}
-
-func (s *DocumentService) GetVersionHistory(ctx context.Context, clerkID string, docID string) ([]models.DocumentVersion, error) {
-	user, err := s.userRepo.GetByClerkID(ctx, clerkID)
-	if err != nil {
-		return nil, err
-	}
-
-	doc, err := s.documentRepo.GetByID(ctx, docID)
-	if err != nil {
-		return nil, ErrDocumentNotFound
-	}
-
-	if doc.UserID != user.ID {
-		return nil, ErrUnauthorized
-	}
-
-	return s.documentRepo.GetVersionHistory(ctx, doc.ID)
-}
-
-func (s *DocumentService) GetVersion(ctx context.Context, clerkID string, docID string, versionStr string) (*models.DocumentVersion, error) {
-	user, err := s.userRepo.GetByClerkID(ctx, clerkID)
-	if err != nil {
-		return nil, err
-	}
-
-	doc, err := s.documentRepo.GetByID(ctx, docID)
-	if err != nil {
-		return nil, ErrDocumentNotFound
-	}
-
-	if doc.UserID != user.ID {
-		return nil, ErrUnauthorized
-	}
-
-	versionNum, err := strconv.Atoi(versionStr)
-	if err != nil {
-		return nil, ErrVersionNotFound
-	}
-
-	version, err := s.documentRepo.GetVersion(ctx, doc.ID, versionNum)
-	if err != nil {
-		return nil, ErrVersionNotFound
-	}
-
-	return version, nil
 }
 
 func (s *DocumentService) DeleteDocument(ctx context.Context, clerkID string, docID string) error {

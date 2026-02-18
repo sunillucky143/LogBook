@@ -6,53 +6,21 @@ export interface Document {
   session_id: string | null
   log_date: string
   title: string | null
-  current_version: number
+  content?: unknown
   created_at: string
   updated_at: string
-}
-
-export interface DocumentWithContent extends Document {
-  content: TiptapContent
-}
-
-export interface DocumentVersion {
-  id: string
-  document_id: string
-  version_number: number
-  content: TiptapContent
-  is_full_snapshot: boolean
-  created_at: string
-}
-
-// Tiptap content structure
-export interface TiptapContent {
-  type: 'doc'
-  content: TiptapNode[]
-}
-
-export interface TiptapNode {
-  type: string
-  attrs?: Record<string, unknown>
-  content?: TiptapNode[]
-  text?: string
-  marks?: TiptapMark[]
-}
-
-export interface TiptapMark {
-  type: string
-  attrs?: Record<string, unknown>
 }
 
 // API requests/responses
 export interface CreateDocumentRequest {
   log_date: string
   title?: string
-  content?: TiptapContent
+  content?: unknown
 }
 
 export interface UpdateDocumentRequest {
   title?: string
-  content?: TiptapContent
+  content?: unknown
 }
 
 export interface DocumentListParams {

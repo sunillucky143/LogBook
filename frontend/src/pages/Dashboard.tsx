@@ -296,11 +296,6 @@ export function Dashboard() {
                         </p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        v{doc.current_version}
-                      </p>
-                    </div>
                   </div>
                 ))}
               </div>

@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"time"
 
@@ -21,44 +20,21 @@ func NewDocumentRepository(db *database.DB) *DocumentRepository {
 	return &DocumentRepository{db: db}
 }
 
-func (r *DocumentRepository) Create(ctx context.Context, doc *models.Document, content json.RawMessage) error {
-	tx, err := r.db.Pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-
-	// Create document
-	docQuery := `
-		INSERT INTO documents (user_id, session_id, log_date, title, current_version)
+func (r *DocumentRepository) Create(ctx context.Context, doc *models.Document) error {
+	query := `
+		INSERT INTO documents (user_id, session_id, log_date, title, content)
 		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id, created_at, updated_at
 	`
 
-	err = tx.QueryRow(ctx, docQuery,
-		doc.UserID, doc.SessionID, doc.LogDate, doc.Title, doc.CurrentVersion,
+	return r.db.Pool.QueryRow(ctx, query,
+		doc.UserID, doc.SessionID, doc.LogDate, doc.Title, doc.Content,
 	).Scan(&doc.ID, &doc.CreatedAt, &doc.UpdatedAt)
-	if err != nil {
-		return err
-	}
-
-	// Create first version
-	versionQuery := `
-		INSERT INTO document_versions (document_id, version_number, content, is_full_snapshot)
-		VALUES ($1, $2, $3, $4)
-	`
-
-	_, err = tx.Exec(ctx, versionQuery, doc.ID, 1, content, true)
-	if err != nil {
-		return err
-	}
-
-	return tx.Commit(ctx)
 }
 
 func (r *DocumentRepository) GetByID(ctx context.Context, id string) (*models.Document, error) {
 	query := `
-		SELECT id, user_id, session_id, log_date, title, current_version, created_at, updated_at
+		SELECT id, user_id, session_id, log_date, title, content, created_at, updated_at
 		FROM documents
 		WHERE id = $1
 	`
@@ -66,7 +42,7 @@ func (r *DocumentRepository) GetByID(ctx context.Context, id string) (*models.Do
 	var doc models.Document
 	err := r.db.Pool.QueryRow(ctx, query, id).Scan(
 		&doc.ID, &doc.UserID, &doc.SessionID, &doc.LogDate, &doc.Title,
-		&doc.CurrentVersion, &doc.CreatedAt, &doc.UpdatedAt,
+		&doc.Content, &doc.CreatedAt, &doc.UpdatedAt,
 	)
 
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -78,7 +54,7 @@ func (r *DocumentRepository) GetByID(ctx context.Context, id string) (*models.Do
 
 func (r *DocumentRepository) GetByUserAndDate(ctx context.Context, userID uuid.UUID, date time.Time) (*models.Document, error) {
 	query := `
-		SELECT id, user_id, session_id, log_date, title, current_version, created_at, updated_at
+		SELECT id, user_id, session_id, log_date, title, content, created_at, updated_at
 		FROM documents
 		WHERE user_id = $1 AND log_date = $2
 	`
@@ -86,7 +62,7 @@ func (r *DocumentRepository) GetByUserAndDate(ctx context.Context, userID uuid.U
 	var doc models.Document
 	err := r.db.Pool.QueryRow(ctx, query, userID, date).Scan(
 		&doc.ID, &doc.UserID, &doc.SessionID, &doc.LogDate, &doc.Title,
-		&doc.CurrentVersion, &doc.CreatedAt, &doc.UpdatedAt,
+		&doc.Content, &doc.CreatedAt, &doc.UpdatedAt,
 	)
 
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -96,37 +72,15 @@ func (r *DocumentRepository) GetByUserAndDate(ctx context.Context, userID uuid.U
 	return &doc, err
 }
 
-func (r *DocumentRepository) Update(ctx context.Context, doc *models.Document, content json.RawMessage, isFullSnapshot bool) error {
-	tx, err := r.db.Pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-
-	// Update document
-	docQuery := `
+func (r *DocumentRepository) Update(ctx context.Context, doc *models.Document) error {
+	query := `
 		UPDATE documents
-		SET title = $1, current_version = $2, updated_at = NOW()
+		SET title = $1, content = $2, updated_at = NOW()
 		WHERE id = $3
 	`
 
-	_, err = tx.Exec(ctx, docQuery, doc.Title, doc.CurrentVersion, doc.ID)
-	if err != nil {
-		return err
-	}
-
-	// Create new version
-	versionQuery := `
-		INSERT INTO document_versions (document_id, version_number, content, is_full_snapshot)
-		VALUES ($1, $2, $3, $4)
-	`
-
-	_, err = tx.Exec(ctx, versionQuery, doc.ID, doc.CurrentVersion, content, isFullSnapshot)
-	if err != nil {
-		return err
-	}
-
-	return tx.Commit(ctx)
+	_, err := r.db.Pool.Exec(ctx, query, doc.Title, doc.Content, doc.ID)
+	return err
 }
 
 func (r *DocumentRepository) Delete(ctx context.Context, id uuid.UUID) error {
@@ -136,7 +90,6 @@ func (r *DocumentRepository) Delete(ctx context.Context, id uuid.UUID) error {
 }
 
 func (r *DocumentRepository) ListByUser(ctx context.Context, userID uuid.UUID, params models.DocumentListParams) ([]models.Document, int, error) {
-	// Count total
 	var total int
 	countQuery := `SELECT COUNT(*) FROM documents WHERE user_id = $1`
 	err := r.db.Pool.QueryRow(ctx, countQuery, userID).Scan(&total)
@@ -144,9 +97,8 @@ func (r *DocumentRepository) ListByUser(ctx context.Context, userID uuid.UUID, p
 		return nil, 0, err
 	}
 
-	// Get paginated results
 	query := `
-		SELECT id, user_id, session_id, log_date, title, current_version, created_at, updated_at
+		SELECT id, user_id, session_id, log_date, title, created_at, updated_at
 		FROM documents
 		WHERE user_id = $1
 		ORDER BY log_date DESC
@@ -164,7 +116,7 @@ func (r *DocumentRepository) ListByUser(ctx context.Context, userID uuid.UUID, p
 		var doc models.Document
 		err := rows.Scan(
 			&doc.ID, &doc.UserID, &doc.SessionID, &doc.LogDate, &doc.Title,
-			&doc.CurrentVersion, &doc.CreatedAt, &doc.UpdatedAt,
+			&doc.CreatedAt, &doc.UpdatedAt,
 		)
 		if err != nil {
 			return nil, 0, err
@@ -173,55 +125,4 @@ func (r *DocumentRepository) ListByUser(ctx context.Context, userID uuid.UUID, p
 	}
 
 	return docs, total, nil
-}
-
-func (r *DocumentRepository) GetVersion(ctx context.Context, docID uuid.UUID, versionNum int) (*models.DocumentVersion, error) {
-	query := `
-		SELECT id, document_id, version_number, content, is_full_snapshot, created_at
-		FROM document_versions
-		WHERE document_id = $1 AND version_number = $2
-	`
-
-	var version models.DocumentVersion
-	err := r.db.Pool.QueryRow(ctx, query, docID, versionNum).Scan(
-		&version.ID, &version.DocumentID, &version.VersionNumber,
-		&version.Content, &version.IsFullSnapshot, &version.CreatedAt,
-	)
-
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, errors.New("version not found")
-	}
-
-	return &version, err
-}
-
-func (r *DocumentRepository) GetVersionHistory(ctx context.Context, docID uuid.UUID) ([]models.DocumentVersion, error) {
-	query := `
-		SELECT id, document_id, version_number, content, is_full_snapshot, created_at
-		FROM document_versions
-		WHERE document_id = $1
-		ORDER BY version_number DESC
-		LIMIT 50
-	`
-
-	rows, err := r.db.Pool.Query(ctx, query, docID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var versions []models.DocumentVersion
-	for rows.Next() {
-		var version models.DocumentVersion
-		err := rows.Scan(
-			&version.ID, &version.DocumentID, &version.VersionNumber,
-			&version.Content, &version.IsFullSnapshot, &version.CreatedAt,
-		)
-		if err != nil {
-			return nil, err
-		}
-		versions = append(versions, version)
-	}
-
-	return versions, nil
 }

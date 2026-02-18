@@ -3,7 +3,10 @@
     "allow": [
       "Bash(go mod tidy:*)",
       "Bash(npm install:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(go build:*)",
+      "Bash(npx tsc:*)",
+      "Bash(go get:*)"
     ]
   }
 }

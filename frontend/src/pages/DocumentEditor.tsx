@@ -8,7 +8,7 @@ import { ArrowLeft, Save, Clock, Loader2, Check } from 'lucide-react'
 import { Card, CardContent, Button, Input } from '../components/ui'
 import { Toolbar } from '../components/editor/Toolbar'
 import { useApi, endpoints, ApiError } from '../services/api'
-import type { DocumentWithContent, PresignedUrlResponse } from '../types/document'
+import type { Document, PresignedUrlResponse } from '../types/document'
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 
@@ -22,9 +22,11 @@ export function DocumentEditor() {
 
   const isNew = id === 'new'
   const sessionIdFromQuery = searchParams.get('session')
+  const dateFromQuery = searchParams.get('date')
 
   const [title, setTitle] = useState('')
   const [docId, setDocId] = useState<string | null>(isNew ? null : id!)
+  const [logDate, setLogDate] = useState<string | null>(null)
   const [loading, setLoading] = useState(!isNew)
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [isPublishing, setIsPublishing] = useState(false)
@@ -34,6 +36,7 @@ export function DocumentEditor() {
   const isSavingRef = useRef(false)
   const contentRef = useRef<unknown>(null)
   const imageUploadRef = useRef<(file: File) => Promise<void>>(async () => {})
+  const trackedImagesRef = useRef<Set<string>>(new Set())
 
   const editor = useEditor({
     extensions: [
@@ -66,6 +69,24 @@ export function DocumentEditor() {
     },
     onUpdate: ({ editor }) => {
       contentRef.current = editor.getJSON()
+
+      // Detect removed images and delete from R2
+      const currentImages = new Set<string>()
+      editor.state.doc.descendants((node) => {
+        if (node.type.name === 'image' && node.attrs.src) {
+          currentImages.add(node.attrs.src as string)
+        }
+      })
+
+      // Find images that were in the previous state but not in the current
+      for (const src of trackedImagesRef.current) {
+        if (!currentImages.has(src) && src.startsWith('http')) {
+          // Fire-and-forget: delete removed image from R2
+          apiRef.current.post(endpoints.upload.deleteByUrl, { url: src }).catch(() => {})
+        }
+      }
+      trackedImagesRef.current = currentImages
+
       debouncedSave()
     },
   })
@@ -78,13 +99,22 @@ export function DocumentEditor() {
     async function load() {
       try {
         setLoading(true)
-        const doc = await apiRef.current.get<DocumentWithContent>(endpoints.documents.get(id!))
+        const doc = await apiRef.current.get<Document>(endpoints.documents.get(id!))
         if (cancelled) return
         setTitle(doc.title || '')
         setDocId(doc.id)
+        setLogDate(doc.log_date)
         if (editor && doc.content) {
           editor.commands.setContent(doc.content)
           contentRef.current = doc.content
+          // Initialize tracked images from loaded content
+          const images = new Set<string>()
+          editor.state.doc.descendants((node) => {
+            if (node.type.name === 'image' && node.attrs.src) {
+              images.add(node.attrs.src as string)
+            }
+          })
+          trackedImagesRef.current = images
         }
       } catch (err) {
         if (!cancelled) {
@@ -109,18 +139,19 @@ export function DocumentEditor() {
 
     try {
       if (!docId) {
-        // Create new document
-        const today = new Date().toISOString().split('T')[0]
-        const doc = await apiRef.current.post<DocumentWithContent>(endpoints.documents.create, {
-          log_date: today,
-          title: title || `Log - ${today}`,
+        // Create new document — use session date if available, otherwise today
+        const docDate = dateFromQuery || new Date().toISOString().split('T')[0]
+        const doc = await apiRef.current.post<Document>(endpoints.documents.create, {
+          log_date: docDate,
+          title: title || `Log - ${docDate}`,
           content,
           session_id: sessionIdFromQuery || undefined,
         })
         setDocId(doc.id)
+        setLogDate(doc.log_date)
       } else {
         // Update existing document
-        await apiRef.current.put<DocumentWithContent>(endpoints.documents.update(docId), {
+        await apiRef.current.put<Document>(endpoints.documents.update(docId), {
           title: title || undefined,
           content,
         })
@@ -131,7 +162,7 @@ export function DocumentEditor() {
     } finally {
       isSavingRef.current = false
     }
-  }, [docId, title, sessionIdFromQuery])
+  }, [docId, title, sessionIdFromQuery, dateFromQuery])
 
   const debouncedSave = useCallback(() => {
     if (saveTimeoutRef.current) {
@@ -170,15 +201,15 @@ export function DocumentEditor() {
       if (!content) return
 
       if (!docId) {
-        const today = new Date().toISOString().split('T')[0]
-        await apiRef.current.post<DocumentWithContent>(endpoints.documents.create, {
-          log_date: today,
-          title: title || `Log - ${today}`,
+        const docDate = dateFromQuery || new Date().toISOString().split('T')[0]
+        await apiRef.current.post<Document>(endpoints.documents.create, {
+          log_date: docDate,
+          title: title || `Log - ${docDate}`,
           content,
           session_id: sessionIdFromQuery || undefined,
         })
       } else {
-        await apiRef.current.put<DocumentWithContent>(endpoints.documents.update(docId), {
+        await apiRef.current.put<Document>(endpoints.documents.update(docId), {
           title: title || undefined,
           content,
         })
@@ -282,7 +313,12 @@ export function DocumentEditor() {
               {isNew ? 'New Entry' : 'Edit Entry'}
             </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+              {(() => {
+                const dateStr = logDate || dateFromQuery || new Date().toISOString()
+                const datePart = dateStr.split('T')[0]
+                const [year, month, day] = datePart.split('-').map(Number)
+                return new Date(year, month - 1, day).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+              })()}
             </p>
           </div>
         </div>

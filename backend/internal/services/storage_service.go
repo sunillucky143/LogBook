@@ -3,20 +3,27 @@ package services
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"log_book/internal/config"
 	"log_book/internal/models"
 	"log_book/internal/repository"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/google/uuid"
 )
 
 type StorageService struct {
-	mediaRepo *repository.MediaRepository
-	docRepo   *repository.DocumentRepository
-	userRepo  *repository.UserRepository
-	r2Config  config.R2Config
+	mediaRepo     *repository.MediaRepository
+	docRepo       *repository.DocumentRepository
+	userRepo      *repository.UserRepository
+	r2Config      config.R2Config
+	s3Client      *s3.Client
+	presignClient *s3.PresignClient
 }
 
 func NewStorageService(
@@ -25,12 +32,33 @@ func NewStorageService(
 	userRepo *repository.UserRepository,
 	r2Config config.R2Config,
 ) *StorageService {
-	return &StorageService{
+	svc := &StorageService{
 		mediaRepo: mediaRepo,
 		docRepo:   docRepo,
 		userRepo:  userRepo,
 		r2Config:  r2Config,
 	}
+
+	// Initialize S3 client for R2
+	r2Endpoint := fmt.Sprintf("https://%s.r2.cloudflarestorage.com", r2Config.AccountID)
+
+	cfg, err := awsconfig.LoadDefaultConfig(context.Background(),
+		awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
+			r2Config.AccessKeyID,
+			r2Config.SecretAccessKey,
+			"",
+		)),
+		awsconfig.WithRegion("auto"),
+	)
+	if err == nil {
+		s3Client := s3.NewFromConfig(cfg, func(o *s3.Options) {
+			o.BaseEndpoint = aws.String(r2Endpoint)
+		})
+		svc.s3Client = s3Client
+		svc.presignClient = s3.NewPresignClient(s3Client)
+	}
+
+	return svc
 }
 
 func (s *StorageService) GeneratePresignedURL(ctx context.Context, clerkID string, input models.PresignedURLRequest) (*models.PresignedURLResponse, error) {
@@ -46,13 +74,24 @@ func (s *StorageService) GeneratePresignedURL(ctx context.Context, clerkID strin
 		uuid.New().String()+getExtension(input.FileType),
 	)
 
-	// TODO: Implement actual R2 presigned URL generation
-	// This requires aws-sdk-go-v2 configured for R2
-	// For now, return a placeholder
+	if s.presignClient == nil {
+		return nil, fmt.Errorf("storage client not initialized")
+	}
+
+	// Generate presigned PUT URL
+	presignResult, err := s.presignClient.PresignPutObject(ctx, &s3.PutObjectInput{
+		Bucket:      aws.String(s.r2Config.BucketName),
+		Key:         aws.String(storageKey),
+		ContentType: aws.String(input.FileType),
+	}, s3.WithPresignExpires(15*time.Minute))
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate presigned URL: %w", err)
+	}
+
 	expiresAt := time.Now().Add(15 * time.Minute).Unix()
 
 	return &models.PresignedURLResponse{
-		UploadURL:  fmt.Sprintf("https://%s.r2.cloudflarestorage.com/%s/%s?X-Amz-Expires=900", s.r2Config.AccountID, s.r2Config.BucketName, storageKey),
+		UploadURL:  presignResult.URL,
 		StorageKey: storageKey,
 		PublicURL:  fmt.Sprintf("%s/%s", s.r2Config.PublicURL, storageKey),
 		ExpiresAt:  expiresAt,
@@ -94,6 +133,18 @@ func (s *StorageService) ConfirmUpload(ctx context.Context, clerkID string, inpu
 	return media, nil
 }
 
+func (s *StorageService) deleteFromR2(ctx context.Context, storageKey string) error {
+	if s.s3Client == nil {
+		return fmt.Errorf("storage client not initialized")
+	}
+
+	_, err := s.s3Client.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: aws.String(s.r2Config.BucketName),
+		Key:    aws.String(storageKey),
+	})
+	return err
+}
+
 func (s *StorageService) DeleteMedia(ctx context.Context, clerkID string, mediaID string) error {
 	user, err := s.userRepo.GetByClerkID(ctx, clerkID)
 	if err != nil {
@@ -109,8 +160,40 @@ func (s *StorageService) DeleteMedia(ctx context.Context, clerkID string, mediaI
 		return ErrUnauthorized
 	}
 
-	// TODO: Delete from R2 storage
-	// s3Client.DeleteObject(...)
+	// Delete from R2 storage (best-effort — don't fail if R2 delete fails)
+	_ = s.deleteFromR2(ctx, media.StorageKey)
+
+	return s.mediaRepo.Delete(ctx, media.ID)
+}
+
+func (s *StorageService) DeleteMediaByURL(ctx context.Context, clerkID string, publicURL string) error {
+	user, err := s.userRepo.GetByClerkID(ctx, clerkID)
+	if err != nil {
+		return err
+	}
+
+	// Extract storage key from public URL by stripping the R2 public URL prefix
+	storageKey := publicURL
+	if s.r2Config.PublicURL != "" {
+		storageKey = strings.TrimPrefix(publicURL, s.r2Config.PublicURL+"/")
+	}
+
+	// If the URL didn't match our public URL prefix, it's not our media
+	if storageKey == publicURL {
+		return ErrMediaNotFound
+	}
+
+	media, err := s.mediaRepo.GetByStorageKey(ctx, storageKey)
+	if err != nil {
+		return ErrMediaNotFound
+	}
+
+	if media.UserID != user.ID {
+		return ErrUnauthorized
+	}
+
+	// Delete from R2 storage (best-effort)
+	_ = s.deleteFromR2(ctx, media.StorageKey)
 
 	return s.mediaRepo.Delete(ctx, media.ID)
 }

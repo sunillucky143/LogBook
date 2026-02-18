@@ -61,7 +61,11 @@ export function Documents() {
   }
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString + 'T00:00:00')
+    // log_date comes as full ISO timestamp (e.g. "2026-02-18T00:00:00Z") or "2026-02-18"
+    // Extract just the date part and parse without timezone shift
+    const datePart = dateString.split('T')[0]
+    const [year, month, day] = datePart.split('-').map(Number)
+    const date = new Date(year, month - 1, day)
     return date.toLocaleDateString('en-US', {
       weekday: 'short',
       year: 'numeric',
@@ -135,7 +139,7 @@ export function Documents() {
         start_time: startDate.toISOString(),
         end_time: endDate.toISOString(),
       })
-      navigate(`/documents/new?session=${session.id}`)
+      navigate(`/documents/new?session=${session.id}&date=${formDate}`)
     } catch (err) {
       setFormError(err instanceof ApiError ? err.message : 'Failed to create session')
     } finally {
@@ -329,9 +333,6 @@ export function Documents() {
                         </span>
                       </div>
                     )}
-                    <div className="text-xs text-gray-400 dark:text-gray-500">
-                      v{doc.current_version}
-                    </div>
                   </CardContent>
                 </Card>
               </Link>

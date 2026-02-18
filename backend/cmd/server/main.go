@@ -47,12 +47,14 @@ func main() {
 	sessionRepo := repository.NewSessionRepository(db)
 	documentRepo := repository.NewDocumentRepository(db)
 	mediaRepo := repository.NewMediaRepository(db)
+	feedbackRepo := repository.NewFeedbackRepository(db)
 
 	// Initialize services
 	timeService := services.NewTimeService(sessionRepo, userRepo)
 	scheduleService := services.NewScheduleService(sessionRepo, userRepo)
 	documentService := services.NewDocumentService(documentRepo, userRepo)
 	storageService := services.NewStorageService(mediaRepo, documentRepo, userRepo, cfg.R2Config)
+	feedbackService := services.NewFeedbackService(feedbackRepo, userRepo)
 
 	// Initialize handlers
 	healthHandler := handlers.NewHealthHandler(db)
@@ -60,6 +62,7 @@ func main() {
 	scheduleHandler := handlers.NewScheduleHandler(scheduleService)
 	documentHandler := handlers.NewDocumentHandler(documentService)
 	uploadHandler := handlers.NewUploadHandler(storageService)
+	feedbackHandler := handlers.NewFeedbackHandler(feedbackService)
 
 	// Initialize rate limiter
 	rateLimiter := middleware.NewRateLimiter(100, time.Minute)
@@ -107,19 +110,22 @@ func main() {
 			documents.GET("/:id", documentHandler.GetDocument)
 			documents.PUT("/:id", documentHandler.UpdateDocument)
 			documents.DELETE("/:id", documentHandler.DeleteDocument)
-			documents.GET("/:id/versions", documentHandler.GetVersionHistory)
-			documents.GET("/:id/versions/:version", documentHandler.GetVersion)
-		}
+			}
 
 		// Upload
 		upload := v1.Group("/upload")
 		{
 			upload.POST("/presign", uploadHandler.GetPresignedURL)
 			upload.POST("/confirm", uploadHandler.ConfirmUpload)
+			upload.POST("/delete-by-url", uploadHandler.DeleteMediaByURL)
 		}
 
 		// Media
 		v1.DELETE("/media/:id", uploadHandler.DeleteMedia)
+
+		// Feedback
+		v1.POST("/feedback", feedbackHandler.CreateFeedback)
+		v1.GET("/feedback", feedbackHandler.ListFeedback)
 	}
 
 	// Start scheduler for auto-stop

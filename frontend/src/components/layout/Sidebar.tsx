@@ -5,6 +5,7 @@ import {
   FileText,
   History,
   Settings,
+  MessageSquare,
   X,
 } from 'lucide-react'
 import { useUIStore } from '../../stores/uiStore'
@@ -16,6 +17,7 @@ const navigation = [
   { name: 'Documents', href: '/documents', icon: FileText },
   { name: 'History', href: '/history', icon: History },
   { name: 'Settings', href: '/settings', icon: Settings },
+  { name: 'Feedback', href: '/feedback', icon: MessageSquare },
 ]
 
 export function Sidebar() {

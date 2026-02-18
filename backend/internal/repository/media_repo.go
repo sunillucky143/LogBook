@@ -52,6 +52,26 @@ func (r *MediaRepository) GetByID(ctx context.Context, id string) (*models.Media
 	return &media, err
 }
 
+func (r *MediaRepository) GetByStorageKey(ctx context.Context, storageKey string) (*models.MediaFile, error) {
+	query := `
+		SELECT id, document_id, user_id, storage_key, file_name, file_type, size_bytes, created_at
+		FROM media_files
+		WHERE storage_key = $1
+	`
+
+	var media models.MediaFile
+	err := r.db.Pool.QueryRow(ctx, query, storageKey).Scan(
+		&media.ID, &media.DocumentID, &media.UserID, &media.StorageKey,
+		&media.FileName, &media.FileType, &media.SizeBytes, &media.CreatedAt,
+	)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errors.New("media not found")
+	}
+
+	return &media, err
+}
+
 func (r *MediaRepository) ListByDocument(ctx context.Context, docID uuid.UUID) ([]models.MediaFile, error) {
 	query := `
 		SELECT id, document_id, user_id, storage_key, file_name, file_type, size_bytes, created_at

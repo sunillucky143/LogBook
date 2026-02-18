@@ -122,6 +122,51 @@ func (h *UploadHandler) ConfirmUpload(c *gin.Context) {
 	c.JSON(http.StatusCreated, models.SuccessResponse(media))
 }
 
+// DeleteMediaByURL deletes a media file by its public URL
+// POST /api/v1/upload/delete-by-url
+func (h *UploadHandler) DeleteMediaByURL(c *gin.Context) {
+	clerkID := middleware.GetClerkID(c)
+
+	var input struct {
+		URL string `json:"url" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse(
+			models.ErrCodeValidation,
+			"Invalid input",
+			err.Error(),
+		))
+		return
+	}
+
+	err := h.storageService.DeleteMediaByURL(c.Request.Context(), clerkID, input.URL)
+	if err != nil {
+		switch err {
+		case services.ErrMediaNotFound:
+			c.JSON(http.StatusNotFound, models.ErrorResponse(
+				models.ErrCodeNotFound,
+				"Media not found",
+				nil,
+			))
+		case services.ErrUnauthorized:
+			c.JSON(http.StatusForbidden, models.ErrorResponse(
+				models.ErrCodeForbidden,
+				"You don't have permission to delete this media",
+				nil,
+			))
+		default:
+			c.JSON(http.StatusInternalServerError, models.ErrorResponse(
+				models.ErrCodeInternal,
+				"Failed to delete media",
+				nil,
+			))
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "Media deleted"}))
+}
+
 // DeleteMedia deletes a media file
 // DELETE /api/v1/media/:id
 func (h *UploadHandler) DeleteMedia(c *gin.Context) {

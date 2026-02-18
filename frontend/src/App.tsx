@@ -7,6 +7,7 @@ import { Documents } from './pages/Documents'
 import { DocumentEditor } from './pages/DocumentEditor'
 import { History } from './pages/History'
 import { Settings } from './pages/Settings'
+import { Feedback } from './pages/Feedback'
 
 function App() {
   return (
@@ -20,6 +21,7 @@ function App() {
             <Route path="/documents/:id" element={<DocumentEditor />} />
             <Route path="/history" element={<History />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/feedback" element={<Feedback />} />
           </Routes>
         </Layout>
       </SignedIn>

@@ -1,0 +1,6 @@
+export { Dashboard } from './Dashboard'
+export { TimeTracker } from './TimeTracker'
+export { Documents } from './Documents'
+export { DocumentEditor } from './DocumentEditor'
+export { History } from './History'
+export { Settings } from './Settings'

@@ -1,0 +1,22 @@
+# Go binary
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+server.exe
+
+# Go test binary
+*.test
+
+# Go coverage
+*.out
+*.prof
+
+# Vendor directory (if using go mod vendor)
+vendor/
+
+# Environment files
+.env
+.env.*
+!.env.example

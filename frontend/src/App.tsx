@@ -11,6 +11,8 @@ import { Feedback } from './pages/Feedback'
 import { AdminDashboard } from './pages/AdminDashboard'
 import { DocsPage } from './pages/DocsPage'
 import { LandingPage } from './pages/LandingPage'
+import { SignInPage } from './pages/SignInPage'
+import { SignUpPage } from './pages/SignUpPage'
 import { useAuthStore } from './stores/authStore'
 import { useApi } from './services/api'
 import { useEffect } from 'react'
@@ -36,6 +38,7 @@ function App() {
 
   return (
     <>
+
       <SignedIn>
         <Layout>
           <Routes>
@@ -52,7 +55,11 @@ function App() {
         </Layout>
       </SignedIn>
       <SignedOut>
-        <LandingPage />
+        <Routes>
+          <Route path="/sign-in/*" element={<SignInPage />} />
+          <Route path="/sign-up/*" element={<SignUpPage />} />
+          <Route path="*" element={<LandingPage />} />
+        </Routes>
       </SignedOut>
     </>
   )

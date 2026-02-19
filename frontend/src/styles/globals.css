@@ -77,6 +77,67 @@
 }
 
 @layer components {
+  /* Documentation prose styles */
+  .prose-doc h3 {
+    @apply text-lg font-semibold text-gray-900 dark:text-gray-100 mt-8 mb-3;
+  }
+
+  .prose-doc h4 {
+    @apply text-base font-semibold text-gray-900 dark:text-gray-100 mt-6 mb-2;
+  }
+
+  .prose-doc p {
+    @apply text-gray-600 dark:text-gray-400 mb-4 leading-relaxed;
+  }
+
+  .prose-doc ul, .prose-doc ol {
+    @apply text-gray-600 dark:text-gray-400 mb-4 pl-6 space-y-2;
+  }
+
+  .prose-doc ul {
+    @apply list-disc;
+  }
+
+  .prose-doc ol {
+    @apply list-decimal;
+  }
+
+  .prose-doc li {
+    @apply leading-relaxed;
+  }
+
+  .prose-doc code {
+    @apply font-mono bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-sm text-gray-800 dark:text-gray-200;
+  }
+
+  .prose-doc pre code {
+    @apply bg-transparent p-0;
+  }
+
+  .prose-doc a {
+    @apply text-primary-600 dark:text-primary-400 underline hover:no-underline;
+  }
+
+  .prose-doc table {
+    @apply w-full my-4 text-sm;
+  }
+
+  .prose-doc thead {
+    @apply border-b-2 border-gray-200 dark:border-gray-700;
+  }
+
+  .prose-doc th {
+    @apply text-left py-2 px-3 font-semibold text-gray-900 dark:text-gray-100;
+  }
+
+  .prose-doc td {
+    @apply py-2 px-3 text-gray-600 dark:text-gray-400 border-b border-gray-100 dark:border-gray-800;
+  }
+
+  .prose-doc strong {
+    @apply text-gray-900 dark:text-gray-100;
+  }
+
   /* Focus ring utility */
   .focus-ring {
     @apply focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900;
@@ -179,6 +240,20 @@
     to {
       opacity: 1;
       transform: translateX(0);
+    }
+  }
+
+  /* Custom animations */
+  .animate-spin-slow {
+    animation: spin 8s linear infinite;
+  }
+
+  @keyframes spin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
     }
   }
 

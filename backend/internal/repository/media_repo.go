@@ -99,7 +99,7 @@ func (r *MediaRepository) ListByDocument(ctx context.Context, docID uuid.UUID) (
 		files = append(files, media)
 	}
 
-	return files, nil
+	return files, rows.Err()
 }
 
 func (r *MediaRepository) Delete(ctx context.Context, id uuid.UUID) error {

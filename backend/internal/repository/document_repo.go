@@ -3,6 +3,8 @@ package repository
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"log_book/internal/database"
@@ -89,23 +91,96 @@ func (r *DocumentRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
+// escapeLike escapes SQL LIKE/ILIKE special characters (%, _, \).
+func escapeLike(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, "%", `\%`)
+	s = strings.ReplaceAll(s, "_", `\_`)
+	return s
+}
+
+// buildWhereClause constructs dynamic WHERE conditions from search params.
+func buildWhereClause(params models.DocumentListParams, startIdx int) (string, []interface{}) {
+	var conditions []string
+	var args []interface{}
+	idx := startIdx
+
+	if params.Query != "" {
+		escaped := escapeLike(params.Query)
+		pattern := strings.ReplaceAll(escaped, "*", "%")
+		if !strings.Contains(pattern, "%") {
+			pattern = "%" + pattern + "%"
+		}
+		conditions = append(conditions, fmt.Sprintf("title ILIKE $%d", idx))
+		args = append(args, pattern)
+		idx++
+	}
+
+	if params.Date != "" {
+		conditions = append(conditions, fmt.Sprintf("log_date = $%d", idx))
+		args = append(args, params.Date)
+		idx++
+	}
+
+	if params.FromDate != "" {
+		conditions = append(conditions, fmt.Sprintf("log_date >= $%d", idx))
+		args = append(args, params.FromDate)
+		idx++
+	}
+
+	if params.ToDate != "" {
+		conditions = append(conditions, fmt.Sprintf("log_date <= $%d", idx))
+		args = append(args, params.ToDate)
+		idx++
+	}
+
+	clause := ""
+	if len(conditions) > 0 {
+		clause = " AND " + strings.Join(conditions, " AND ")
+	}
+	return clause, args
+}
+
+func buildOrderClause(params models.DocumentListParams) string {
+	sortCol := "log_date"
+	if params.Sort == "title" {
+		sortCol = "title"
+	}
+
+	order := "DESC"
+	if params.Order == "asc" {
+		order = "ASC"
+	}
+
+	return fmt.Sprintf(" ORDER BY %s %s", sortCol, order)
+}
+
 func (r *DocumentRepository) ListByUser(ctx context.Context, userID uuid.UUID, params models.DocumentListParams) ([]models.Document, int, error) {
+	whereExtra, whereArgs := buildWhereClause(params, 2)
+
+	countQuery := fmt.Sprintf(`SELECT COUNT(*) FROM documents WHERE user_id = $1%s`, whereExtra)
+	countArgs := append([]interface{}{userID}, whereArgs...)
+
 	var total int
-	countQuery := `SELECT COUNT(*) FROM documents WHERE user_id = $1`
-	err := r.db.Pool.QueryRow(ctx, countQuery, userID).Scan(&total)
+	err := r.db.Pool.QueryRow(ctx, countQuery, countArgs...).Scan(&total)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	query := `
-		SELECT id, user_id, session_id, log_date, title, created_at, updated_at
+	orderClause := buildOrderClause(params)
+	nextIdx := 2 + len(whereArgs)
+	query := fmt.Sprintf(
+		`SELECT id, user_id, session_id, log_date, title, created_at, updated_at
 		FROM documents
-		WHERE user_id = $1
-		ORDER BY log_date DESC
-		LIMIT $2 OFFSET $3
-	`
+		WHERE user_id = $1%s%s
+		LIMIT $%d OFFSET $%d`,
+		whereExtra, orderClause, nextIdx, nextIdx+1,
+	)
 
-	rows, err := r.db.Pool.Query(ctx, query, userID, params.PerPage, (params.Page-1)*params.PerPage)
+	allArgs := append([]interface{}{userID}, whereArgs...)
+	allArgs = append(allArgs, params.PerPage, (params.Page-1)*params.PerPage)
+
+	rows, err := r.db.Pool.Query(ctx, query, allArgs...)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -124,5 +199,52 @@ func (r *DocumentRepository) ListByUser(ctx context.Context, userID uuid.UUID, p
 		docs = append(docs, doc)
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
 	return docs, total, nil
+}
+
+// SearchWithContent returns documents matching search params with content included (capped at 50).
+func (r *DocumentRepository) SearchWithContent(ctx context.Context, userID uuid.UUID, params models.DocumentListParams) ([]models.Document, error) {
+	whereExtra, whereArgs := buildWhereClause(params, 2)
+	orderClause := buildOrderClause(params)
+	nextIdx := 2 + len(whereArgs)
+
+	query := fmt.Sprintf(
+		`SELECT id, user_id, session_id, log_date, title, content, created_at, updated_at
+		FROM documents
+		WHERE user_id = $1%s%s
+		LIMIT $%d`,
+		whereExtra, orderClause, nextIdx,
+	)
+
+	allArgs := append([]interface{}{userID}, whereArgs...)
+	allArgs = append(allArgs, 50)
+
+	rows, err := r.db.Pool.Query(ctx, query, allArgs...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var docs []models.Document
+	for rows.Next() {
+		var doc models.Document
+		err := rows.Scan(
+			&doc.ID, &doc.UserID, &doc.SessionID, &doc.LogDate, &doc.Title,
+			&doc.Content, &doc.CreatedAt, &doc.UpdatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		docs = append(docs, doc)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return docs, nil
 }

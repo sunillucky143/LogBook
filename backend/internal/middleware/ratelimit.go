@@ -12,9 +12,10 @@ import (
 
 type RateLimiter struct {
 	requests map[string][]time.Time
-	mu       sync.RWMutex
+	mu       sync.Mutex
 	limit    int
 	window   time.Duration
+	stopChan chan struct{}
 }
 
 func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
@@ -22,33 +23,42 @@ func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
 		requests: make(map[string][]time.Time),
 		limit:    limit,
 		window:   window,
+		stopChan: make(chan struct{}),
 	}
-
-	// Cleanup old entries periodically
 	go rl.cleanup()
-
 	return rl
+}
+
+func (rl *RateLimiter) Stop() {
+	close(rl.stopChan)
 }
 
 func (rl *RateLimiter) cleanup() {
 	ticker := time.NewTicker(time.Minute)
-	for range ticker.C {
-		rl.mu.Lock()
-		now := time.Now()
-		for key, times := range rl.requests {
-			var valid []time.Time
-			for _, t := range times {
-				if now.Sub(t) < rl.window {
-					valid = append(valid, t)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			rl.mu.Lock()
+			now := time.Now()
+			for key, times := range rl.requests {
+				valid := times[:0]
+				for _, t := range times {
+					if now.Sub(t) < rl.window {
+						valid = append(valid, t)
+					}
+				}
+				if len(valid) == 0 {
+					delete(rl.requests, key)
+				} else {
+					rl.requests[key] = valid
 				}
 			}
-			if len(valid) == 0 {
-				delete(rl.requests, key)
-			} else {
-				rl.requests[key] = valid
-			}
+			rl.mu.Unlock()
+		case <-rl.stopChan:
+			return
 		}
-		rl.mu.Unlock()
 	}
 }
 
@@ -59,8 +69,7 @@ func (rl *RateLimiter) Allow(key string) bool {
 	now := time.Now()
 	windowStart := now.Add(-rl.window)
 
-	// Filter requests within the window
-	var valid []time.Time
+	valid := rl.requests[key][:0]
 	for _, t := range rl.requests[key] {
 		if t.After(windowStart) {
 			valid = append(valid, t)
@@ -78,7 +87,6 @@ func (rl *RateLimiter) Allow(key string) bool {
 
 func RateLimitMiddleware(limiter *RateLimiter) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Use user ID if authenticated, otherwise use IP
 		key := GetClerkID(c)
 		if key == "" {
 			key = c.ClientIP()

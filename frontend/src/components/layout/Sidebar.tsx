@@ -6,9 +6,12 @@ import {
   History,
   Settings,
   MessageSquare,
+  Shield,
+  BookOpen,
   X,
 } from 'lucide-react'
 import { useUIStore } from '../../stores/uiStore'
+import { useAuthStore } from '../../stores/authStore'
 import { Button } from '../ui/Button'
 
 const navigation = [
@@ -18,10 +21,17 @@ const navigation = [
   { name: 'History', href: '/history', icon: History },
   { name: 'Settings', href: '/settings', icon: Settings },
   { name: 'Feedback', href: '/feedback', icon: MessageSquare },
+  { name: 'Docs', href: '/docs', icon: BookOpen },
+  { name: 'Admin', href: '/admin', icon: Shield, role: 'admin' },
 ]
 
 export function Sidebar() {
   const { isSidebarOpen, closeSidebar } = useUIStore()
+  const { user } = useAuthStore()
+  
+  const filteredNavigation = navigation.filter(item => 
+    !item.role || (user && user.role === item.role)
+  )
 
   return (
     <>
@@ -57,7 +67,7 @@ export function Sidebar() {
 
           {/* Navigation */}
           <nav className="flex-1 space-y-1 px-3 py-4">
-            {navigation.map((item) => (
+            {filteredNavigation.map((item) => (
               <NavLink
                 key={item.name}
                 to={item.href}

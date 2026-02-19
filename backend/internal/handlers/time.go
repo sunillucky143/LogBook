@@ -37,6 +37,12 @@ func (h *TimeHandler) StartSession(c *gin.Context) {
 				"You already have an active session",
 				nil,
 			))
+		case services.ErrSessionExistsForDate:
+			c.JSON(http.StatusConflict, models.ErrorResponse(
+				models.ErrCodeValidation,
+				"A session already exists for today. Only one session per day is allowed.",
+				nil,
+			))
 		default:
 			c.JSON(http.StatusInternalServerError, models.ErrorResponse(
 				models.ErrCodeInternal,
@@ -86,6 +92,12 @@ func (h *TimeHandler) StopSession(c *gin.Context) {
 				"You don't have permission to stop this session",
 				nil,
 			))
+		case services.ErrSessionTooShort:
+			c.JSON(http.StatusBadRequest, models.ErrorResponse(
+				models.ErrCodeValidation,
+				"Session must run for at least 4 hours before stopping.",
+				nil,
+			))
 		default:
 			c.JSON(http.StatusInternalServerError, models.ErrorResponse(
 				models.ErrCodeInternal,
@@ -123,6 +135,12 @@ func (h *TimeHandler) CreateManualSession(c *gin.Context) {
 				"End time must be after start time",
 				nil,
 			))
+		case services.ErrSessionTooShort:
+			c.JSON(http.StatusBadRequest, models.ErrorResponse(
+				models.ErrCodeValidation,
+				"Session must be at least 4 hours.",
+				nil,
+			))
 		case services.ErrSessionTooLong:
 			c.JSON(http.StatusBadRequest, models.ErrorResponse(
 				models.ErrCodeValidation,
@@ -133,6 +151,12 @@ func (h *TimeHandler) CreateManualSession(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, models.ErrorResponse(
 				models.ErrCodeValidation,
 				"End time cannot be in the future",
+				nil,
+			))
+		case services.ErrSessionExistsForDate:
+			c.JSON(http.StatusConflict, models.ErrorResponse(
+				models.ErrCodeValidation,
+				"A session already exists for this date. Only one session per day is allowed.",
 				nil,
 			))
 		default:

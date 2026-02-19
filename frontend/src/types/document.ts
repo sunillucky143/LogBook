@@ -30,6 +30,17 @@ export interface DocumentListParams {
   per_page?: number
 }
 
+export interface DocumentSearchParams {
+  q?: string
+  date?: string
+  from_date?: string
+  to_date?: string
+  sort?: 'date' | 'title'
+  order?: 'asc' | 'desc'
+  page?: number
+  per_page?: number
+}
+
 // Media file types
 export interface MediaFile {
   id: string

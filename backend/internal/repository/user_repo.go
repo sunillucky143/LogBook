@@ -128,12 +128,7 @@ func (r *UserRepository) SyncUser(ctx context.Context, clerkID, email, name stri
 		user.Name = name
 		shouldUpdate = true
 	}
-	if email != "" && user.Email != email && user.Email == clerkID + "@placeholder.com" {
-		// Only update email if it was a placeholder or we want to force sync?
-		// Let's force sync email too if provided
-		user.Email = email
-		shouldUpdate = true
-	} else if email != "" && user.Email != email {
+	if email != "" && user.Email != email {
 		user.Email = email
 		shouldUpdate = true
 	}

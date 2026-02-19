@@ -35,7 +35,7 @@ export function DocumentEditor() {
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isSavingRef = useRef(false)
   const contentRef = useRef<unknown>(null)
-  const imageUploadRef = useRef<(file: File) => Promise<void>>(async () => {})
+  const imageUploadRef = useRef<(file: File) => Promise<void>>(async () => { })
   const trackedImagesRef = useRef<Set<string>>(new Set())
 
   const editor = useEditor({
@@ -82,7 +82,7 @@ export function DocumentEditor() {
       for (const src of trackedImagesRef.current) {
         if (!currentImages.has(src) && src.startsWith('http')) {
           // Fire-and-forget: delete removed image from R2
-          apiRef.current.post(endpoints.upload.deleteByUrl, { url: src }).catch(() => {})
+          apiRef.current.post(endpoints.upload.deleteByUrl, { url: src }).catch(() => { })
         }
       }
       trackedImagesRef.current = currentImages
@@ -136,6 +136,7 @@ export function DocumentEditor() {
 
     isSavingRef.current = true
     setSaveStatus('saving')
+    setError(null)
 
     try {
       if (!docId) {
@@ -157,8 +158,13 @@ export function DocumentEditor() {
         })
       }
       setSaveStatus('saved')
-    } catch {
+    } catch (err) {
       setSaveStatus('error')
+      if (err instanceof ApiError && err.status === 409) {
+        setError('Only one document allowed per day. Please edit the existing entry.')
+      } else {
+        setError('Failed to save document')
+      }
     } finally {
       isSavingRef.current = false
     }
@@ -216,7 +222,11 @@ export function DocumentEditor() {
       }
       navigate('/documents')
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Failed to publish document')
+      if (err instanceof ApiError && err.status === 409) {
+        setError('Only one document allowed per day. Please edit the existing entry.')
+      } else {
+        setError(err instanceof ApiError ? err.message : 'Failed to publish document')
+      }
     } finally {
       setIsPublishing(false)
     }

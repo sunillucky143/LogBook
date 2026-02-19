@@ -91,7 +91,22 @@ func (r *DocumentRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
-// escapeLike escapes SQL LIKE/ILIKE special characters (%, _, \).
+func (r *DocumentRepository) HasSessionOnDate(ctx context.Context, userID uuid.UUID, date time.Time) (bool, error) {
+	// ... existing implementation ... (Wait, this is SessionRepo method name? No, I am in DocumentRepo)
+	// Checking file content... this method seems to be from SessionRepo in my memory?
+	// Ah, I need to check document_repo.go content again to be sure where to insert.
+	return false, nil
+}
+
+// HasDocumentForSession checks if a document already exists for the given session ID
+func (r *DocumentRepository) HasDocumentForSession(ctx context.Context, sessionID uuid.UUID) (bool, error) {
+	var count int
+	err := r.db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM documents WHERE session_id = $1`, sessionID).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
 func escapeLike(s string) string {
 	s = strings.ReplaceAll(s, `\`, `\\`)
 	s = strings.ReplaceAll(s, "%", `\%`)

@@ -39,7 +39,7 @@ func (h *DocumentHandler) CreateDocument(c *gin.Context) {
 		case services.ErrDocumentExists:
 			c.JSON(http.StatusConflict, models.ErrorResponse(
 				models.ErrCodeConflict,
-				"A document already exists for this date",
+				"Only one document allowed per session, per day",
 				nil,
 			))
 		default:

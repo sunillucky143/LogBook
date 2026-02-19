@@ -68,19 +68,29 @@ func (rl *RateLimiter) Allow(key string) bool {
 
 	now := time.Now()
 	windowStart := now.Add(-rl.window)
-	times := rl.requests[key]
-	if times == nil {
+	
+	times, exists := rl.requests[key]
+	if !exists {
 		rl.requests[key] = []time.Time{now}
 		return true
 	}
+
+	// Filter out old requests
 	valid := times[:0]
 	for _, t := range times {
-		rl.requests[key] = valid
-		return false
+		if t.After(windowStart) {
+			valid = append(valid, t)
+		}
 	}
 
-	rl.requests[key] = append(valid, now)
-	return true
+	rl.requests[key] = valid
+
+	if len(valid) < rl.limit {
+		rl.requests[key] = append(valid, now)
+		return true
+	}
+
+	return false
 }
 
 func RateLimitMiddleware(limiter *RateLimiter) gin.HandlerFunc {

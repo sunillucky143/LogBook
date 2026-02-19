@@ -209,6 +209,10 @@ func (s *SummarizeService) StreamSummary(ctx context.Context, clerkID string, pa
 		}
 	}
 
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("error reading response stream: %w", err)
+	}
+
 	fmt.Fprintf(writer, "data: [DONE]\n\n")
 	flusher.Flush()
 

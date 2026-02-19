@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -50,13 +51,16 @@ func NewStorageService(
 		)),
 		awsconfig.WithRegion("auto"),
 	)
-	if err == nil {
-		s3Client := s3.NewFromConfig(cfg, func(o *s3.Options) {
-			o.BaseEndpoint = aws.String(r2Endpoint)
-		})
-		svc.s3Client = s3Client
-		svc.presignClient = s3.NewPresignClient(s3Client)
+	if err != nil {
+		log.Printf("WARNING: Failed to initialize R2 storage client: %v", err)
+		return svc
 	}
+
+	s3Client := s3.NewFromConfig(cfg, func(o *s3.Options) {
+		o.BaseEndpoint = aws.String(r2Endpoint)
+	})
+	svc.s3Client = s3Client
+	svc.presignClient = s3.NewPresignClient(s3Client)
 
 	return svc
 }

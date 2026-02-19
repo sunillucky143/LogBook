@@ -21,67 +21,71 @@ import (
 )
 
 func main() {
-	// Load configuration
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	// Set Gin mode
 	if cfg.Environment == "production" {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
-	// Initialize Clerk
 	middleware.InitClerk(cfg.ClerkSecret)
 
-	// Connect to database
 	db, err := database.New(cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
 	defer db.Close()
 
-	// Initialize repositories
+	// Repositories
 	userRepo := repository.NewUserRepository(db)
 	sessionRepo := repository.NewSessionRepository(db)
 	documentRepo := repository.NewDocumentRepository(db)
 	mediaRepo := repository.NewMediaRepository(db)
 	feedbackRepo := repository.NewFeedbackRepository(db)
+	adminRepo := repository.NewAdminRepository(db)
 
-	// Initialize services
+	// Services
 	timeService := services.NewTimeService(sessionRepo, userRepo)
 	scheduleService := services.NewScheduleService(sessionRepo, userRepo)
 	documentService := services.NewDocumentService(documentRepo, userRepo)
 	storageService := services.NewStorageService(mediaRepo, documentRepo, userRepo, cfg.R2Config)
 	feedbackService := services.NewFeedbackService(feedbackRepo, userRepo)
+	summarizeService := services.NewSummarizeService(documentRepo, userRepo, adminRepo, cfg.ClaudeAPIKey)
+	adminService := services.NewAdminService(adminRepo)
 
-	// Initialize handlers
+	// Handlers
 	healthHandler := handlers.NewHealthHandler(db)
 	timeHandler := handlers.NewTimeHandler(timeService)
 	scheduleHandler := handlers.NewScheduleHandler(scheduleService)
 	documentHandler := handlers.NewDocumentHandler(documentService)
 	uploadHandler := handlers.NewUploadHandler(storageService)
 	feedbackHandler := handlers.NewFeedbackHandler(feedbackService)
+	authHandler := handlers.NewAuthHandler(userRepo)
+	summarizeHandler := handlers.NewSummarizeHandler(summarizeService)
+	adminHandler := handlers.NewAdminHandler(adminService)
 
-	// Initialize rate limiter
 	rateLimiter := middleware.NewRateLimiter(100, time.Minute)
 
-	// Setup Gin router
 	router := gin.Default()
+	router.Use(middleware.CORSMiddleware(cfg.AllowedOrigins))
 
-	// Global middleware
-	router.Use(middleware.CORSMiddleware())
+	// Request body size limit (10MB)
+	router.MaxMultipartMemory = 10 << 20
 
-	// Health check endpoints (no auth required)
+	// Health (no auth)
 	router.GET("/health", healthHandler.Health)
 	router.GET("/ready", healthHandler.Ready)
 
-	// API v1 routes
+	// API v1 (auth + rate limit)
 	v1 := router.Group("/api/v1")
-	v1.Use(middleware.AuthMiddleware())
+	v1.Use(middleware.AuthMiddleware(userRepo))
 	v1.Use(middleware.RateLimitMiddleware(rateLimiter))
 	{
+		// Auth
+		v1.GET("/me", authHandler.GetMe)
+
 		// Time tracking
 		time := v1.Group("/time")
 		{
@@ -107,10 +111,13 @@ func main() {
 		{
 			documents.POST("", documentHandler.CreateDocument)
 			documents.GET("", documentHandler.ListDocuments)
+			documents.GET("/summarize/quota", summarizeHandler.GetQuota)
+			documents.GET("/summarize", summarizeHandler.Summarize)
+
 			documents.GET("/:id", documentHandler.GetDocument)
 			documents.PUT("/:id", documentHandler.UpdateDocument)
 			documents.DELETE("/:id", documentHandler.DeleteDocument)
-			}
+		}
 
 		// Upload
 		upload := v1.Group("/upload")
@@ -126,24 +133,36 @@ func main() {
 		// Feedback
 		v1.POST("/feedback", feedbackHandler.CreateFeedback)
 		v1.GET("/feedback", feedbackHandler.ListFeedback)
+
+		// Admin
+		admin := v1.Group("/admin")
+		admin.Use(middleware.AdminMiddleware(userRepo))
+		{
+			admin.GET("/stats", adminHandler.GetGlobalStats)
+			admin.GET("/users", adminHandler.GetUserStats)
+			admin.GET("/ai-usage", adminHandler.GetAIUsageStats)
+			admin.GET("/ai-usage/users", adminHandler.GetPerUserAIUsage)
+			admin.GET("/feedback", adminHandler.GetFeedback)
+		}
 	}
 
-	// Start scheduler for auto-stop
+	// Background scheduler
 	sched := scheduler.New(scheduleService, time.Minute)
 	sched.Start()
 
-	// Create HTTP server
+	// HTTP server — WriteTimeout set high enough for SSE streaming
 	srv := &http.Server{
-		Addr:         ":" + cfg.Port,
-		Handler:      router,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		Addr:              ":" + cfg.Port,
+		Handler:           router,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      120 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    1 << 20, // 1MB
 	}
 
-	// Start server in goroutine
 	go func() {
-		log.Printf("Server starting on port %s", cfg.Port)
+		log.Printf("Server starting on port %s (%s)", cfg.Port, cfg.Environment)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Server failed: %v", err)
 		}
@@ -156,10 +175,9 @@ func main() {
 
 	log.Println("Shutting down server...")
 
-	// Stop scheduler
 	sched.Stop()
+	rateLimiter.Stop()
 
-	// Shutdown HTTP server with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 

@@ -32,14 +32,14 @@ func (r *UserRepository) Create(ctx context.Context, user *models.User) error {
 
 func (r *UserRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.User, error) {
 	query := `
-		SELECT id, clerk_id, email, name, created_at, updated_at
+		SELECT id, clerk_id, email, name, role, created_at, updated_at
 		FROM users
 		WHERE id = $1
 	`
 
 	var user models.User
 	err := r.db.Pool.QueryRow(ctx, query, id).Scan(
-		&user.ID, &user.ClerkID, &user.Email, &user.Name,
+		&user.ID, &user.ClerkID, &user.Email, &user.Name, &user.Role,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 
@@ -52,14 +52,14 @@ func (r *UserRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Use
 
 func (r *UserRepository) GetByClerkID(ctx context.Context, clerkID string) (*models.User, error) {
 	query := `
-		SELECT id, clerk_id, email, name, created_at, updated_at
+		SELECT id, clerk_id, email, name, role, created_at, updated_at
 		FROM users
 		WHERE clerk_id = $1
 	`
 
 	var user models.User
 	err := r.db.Pool.QueryRow(ctx, query, clerkID).Scan(
-		&user.ID, &user.ClerkID, &user.Email, &user.Name,
+		&user.ID, &user.ClerkID, &user.Email, &user.Name, &user.Role,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 
@@ -101,4 +101,43 @@ func (r *UserRepository) Update(ctx context.Context, user *models.User) error {
 
 	_, err := r.db.Pool.Exec(ctx, query, user.Email, user.Name, user.ID)
 	return err
+}
+
+func (r *UserRepository) SyncUser(ctx context.Context, clerkID, email, name string) (*models.User, error) {
+	// Try to get existing user
+	user, err := r.GetByClerkID(ctx, clerkID)
+	if err != nil {
+		// Create new user if not found
+		newUser := &models.User{
+			ClerkID: clerkID,
+			Email:   email,
+			Name:    name,
+		}
+		if newUser.Email == "" {
+			newUser.Email = clerkID + "@placeholder.com"
+		}
+		if err := r.Create(ctx, newUser); err != nil {
+			return nil, err
+		}
+		return newUser, nil
+	}
+
+	// Update if info changed/missing
+	shouldUpdate := false
+	if name != "" && user.Name != name {
+		user.Name = name
+		shouldUpdate = true
+	}
+	if email != "" && user.Email != email {
+		user.Email = email
+		shouldUpdate = true
+	}
+
+	if shouldUpdate {
+		if err := r.Update(ctx, user); err != nil {
+			return nil, err
+		}
+	}
+
+	return user, nil
 }

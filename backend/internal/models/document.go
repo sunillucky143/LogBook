@@ -35,4 +35,8 @@ type DocumentListParams struct {
 	PerPage  int    `form:"per_page,default=20"`
 	FromDate string `form:"from_date"`
 	ToDate   string `form:"to_date"`
+	Query    string `form:"q"`
+	Date     string `form:"date"`
+	Sort     string `form:"sort,default=date"`
+	Order    string `form:"order,default=desc"`
 }

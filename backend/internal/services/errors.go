@@ -12,6 +12,8 @@ var (
 	ErrInvalidTimeRange    = errors.New("end time must be after start time")
 	ErrSessionTooLong      = errors.New("session duration cannot exceed 24 hours")
 	ErrFutureEndTime       = errors.New("end time cannot be in the future")
+	ErrSessionExistsForDate = errors.New("a session already exists for this date")
+	ErrSessionTooShort      = errors.New("session must be at least 4 hours")
 
 	// Document errors
 	ErrDocumentNotFound = errors.New("document not found")

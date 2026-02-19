@@ -36,10 +36,20 @@ func (s *TimeService) StartSession(ctx context.Context, clerkID string, deviceID
 		return nil, ErrSessionAlreadyActive
 	}
 
+	// Check one session per day
+	now := time.Now().UTC()
+	exists, err := s.sessionRepo.HasSessionOnDate(ctx, user.ID, now)
+	if err != nil {
+		return nil, err
+	}
+	if exists {
+		return nil, ErrSessionExistsForDate
+	}
+
 	// Create new session
 	session := &models.TimeSession{
 		UserID:    user.ID,
-		StartTime: time.Now().UTC(),
+		StartTime: now,
 		Status:    string(models.SessionStatusActive),
 		DeviceID:  deviceID,
 	}
@@ -75,8 +85,13 @@ func (s *TimeService) StopSession(ctx context.Context, clerkID string, sessionID
 		return nil, ErrNoActiveSession
 	}
 
-	// Stop the session
+	// Check minimum 4 hours
 	now := time.Now().UTC()
+	if now.Sub(session.StartTime) < 4*time.Hour {
+		return nil, ErrSessionTooShort
+	}
+
+	// Stop the session
 	session.EndTime = &now
 	session.Status = string(models.SessionStatusCompleted)
 
@@ -109,6 +124,11 @@ func (s *TimeService) CreateManualSession(ctx context.Context, clerkID string, i
 		return nil, ErrInvalidTimeRange
 	}
 
+	// Validate: duration >= 4 hours
+	if endTime.Sub(startTime) < 4*time.Hour {
+		return nil, ErrSessionTooShort
+	}
+
 	// Validate: duration <= 24 hours
 	if endTime.Sub(startTime) > 24*time.Hour {
 		return nil, ErrSessionTooLong
@@ -117,6 +137,15 @@ func (s *TimeService) CreateManualSession(ctx context.Context, clerkID string, i
 	// Validate: end_time is not in the future
 	if endTime.After(time.Now().UTC()) {
 		return nil, ErrFutureEndTime
+	}
+
+	// Check one session per day
+	exists, err := s.sessionRepo.HasSessionOnDate(ctx, user.ID, startTime.UTC())
+	if err != nil {
+		return nil, err
+	}
+	if exists {
+		return nil, ErrSessionExistsForDate
 	}
 
 	session := &models.TimeSession{

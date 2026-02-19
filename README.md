@@ -45,12 +45,17 @@ Thousands of international students on OPT (Optional Practical Training) do unpa
 
 | Feature | Description |
 |---|---|
-| **Time Tracking** | One-click start/stop timer with real-time elapsed display |
+| **Time Tracking** | One-click start/stop timer with real-time elapsed display. One session per day, 4-hour minimum duration |
 | **Auto-Stop Scheduling** | Set a timer to automatically stop after 1h, 2h, 4h, 8h, or a custom duration |
+| **Manual Sessions** | Record past sessions with custom start/end times (validated: 4h min, 24h max, no future dates) |
 | **Daily Log Entries** | Rich text editor (bold, italic, lists, headings, links) tied to each day |
 | **Image Uploads** | Drag-and-drop or paste images directly into log entries |
 | **Version History** | Every save creates a version -- roll back to any previous state |
+| **AI Summarize** | Claude-powered daily activity summaries from your log entries (3 per month, rate-limited) |
+| **Search & Filter** | Search documents by title/content, filter sessions by date range and status, sort by multiple fields |
 | **Dashboard** | Weekly/monthly hour summaries, recent sessions, and activity overview |
+| **Admin Dashboard** | Global stats, per-user AI usage tracking, user management, feedback review (admin-only) |
+| **Feedback** | In-app feedback submission (bug reports, feature requests, general feedback) |
 | **Session History** | Filterable list of all past sessions with date range and status filters |
 | **Multi-Device** | Sessions track device IDs so you can work from anywhere |
 | **Dark Mode** | Full dark/light theme toggle |
@@ -63,6 +68,7 @@ Thousands of international students on OPT (Optional Practical Training) do unpa
 | Layer | Technology |
 |---|---|
 | **Backend** | Go 1.24, Gin, PostgreSQL (Supabase), Clerk JWT Auth |
+| **AI** | Claude API (Sonnet 4.5) for document summarization |
 | **Frontend** | React 18, TypeScript, Vite, Tailwind CSS, Zustand, TanStack Query |
 | **Editor** | Tiptap (ProseMirror-based WYSIWYG) |
 | **Storage** | Cloudflare R2 (S3-compatible object storage) |
@@ -185,6 +191,7 @@ Fill in your `.env` file:
 | `R2_ACCESS_KEY_ID` | R2 access key |
 | `R2_SECRET_ACCESS_KEY` | R2 secret key |
 | `R2_BUCKET_NAME` | R2 bucket name |
+| `ANTHROPIC_API_KEY` | Anthropic API key for AI summarization |
 
 Run the server:
 
@@ -244,84 +251,46 @@ All endpoints under `/api/v1/` require authentication (Clerk JWT Bearer token).
 | `POST` | `/api/v1/upload/presign` | Get presigned upload URL |
 | `POST` | `/api/v1/upload/confirm` | Confirm media upload |
 | `DELETE` | `/api/v1/media/:id` | Delete media file |
+| `GET` | `/api/v1/documents/summarize` | AI-powered daily summary (SSE stream) |
+| `GET` | `/api/v1/documents/summarize/quota` | Get remaining AI summary quota |
+| `POST` | `/api/v1/feedback` | Submit feedback |
+| `GET` | `/api/v1/admin/stats` | Admin: global dashboard stats |
+| `GET` | `/api/v1/admin/users` | Admin: all users with usage stats |
+| `GET` | `/api/v1/admin/ai-usage` | Admin: daily AI usage breakdown |
+| `GET` | `/api/v1/admin/ai-usage/users` | Admin: per-user AI token usage |
+| `GET` | `/api/v1/admin/feedback` | Admin: all user feedback |
 
 ---
 
 ## Contributing
 
-LogBook is built to be **contribution-first**. Whether you're fixing a typo, adding a feature, or improving docs -- every contribution matters.
+We welcome contributions! Please read our [Contributing Guide](CONTRIBUTING.md) for details on development setup, coding standards, and the PR process.
 
-### How to Contribute
+Look for issues labeled [`good first issue`](https://github.com/sunillucky143/LogBook/labels/good%20first%20issue) to get started.
 
-1. **Fork** the repository
-2. **Create a branch** from `main`:
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
-3. **Make your changes** -- follow the conventions below
-4. **Test** your changes:
-   ```bash
-   # Backend
-   cd backend && go test ./...
+## Security
 
-   # Frontend
-   cd frontend && npm run lint && npm run build
-   ```
-5. **Commit** with a clear message:
-   ```bash
-   git commit -m "feat: add weekly export to PDF"
-   ```
-6. **Push** and open a **Pull Request**
+Found a vulnerability? Please report it responsibly. See our [Security Policy](SECURITY.md) for details.
 
-### Commit Convention
+## Code of Conduct
 
-We follow [Conventional Commits](https://www.conventionalcommits.org/):
-
-| Prefix | Use |
-|---|---|
-| `feat:` | New feature |
-| `fix:` | Bug fix |
-| `docs:` | Documentation only |
-| `style:` | Formatting, no logic change |
-| `refactor:` | Code restructuring, no behavior change |
-| `test:` | Adding or updating tests |
-| `chore:` | Build, CI, dependency updates |
-
-### Good First Issues
-
-Look for issues labeled [`good first issue`](https://github.com/sunillucky143/LogBook/labels/good%20first%20issue) -- these are curated for new contributors.
-
-### Areas Where We Need Help
-
-- **Testing** -- Unit tests for backend services and repository layer, component tests for frontend
-- **Export** -- PDF and DOCX export of log entries and time summaries
-- **Analytics** -- Charts and visualizations for time tracking data
-- **Accessibility** -- WCAG compliance audit and improvements
-- **Mobile** -- Responsive refinements and PWA support
-- **CI/CD** -- GitHub Actions for lint, test, and build pipelines
-- **Documentation** -- API docs (OpenAPI/Swagger), user guide, deployment guide
-- **i18n** -- Internationalization support for non-English speakers
-- **Notifications** -- Email or push reminders to start/stop tracking
-
-### Development Guidelines
-
-- **Backend**: Follow standard Go project layout. Business logic goes in `services/`, database queries in `repository/`, HTTP handling in `handlers/`.
-- **Frontend**: Components in `components/`, pages in `pages/`, state in `stores/`. Use TypeScript strictly -- no `any` types.
-- **Styling**: Use Tailwind CSS utility classes. Follow the existing design system in `components/ui/`.
-- **State**: Server state via TanStack Query, client state via Zustand.
-- **API Client**: Use the `useApi()` hook. Don't make raw `fetch` calls.
+This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md). By participating, you agree to uphold this code.
 
 ---
 
 ## Roadmap
 
-- [x] Core time tracking (start/stop/manual)
+- [x] Core time tracking (start/stop/manual) with session constraints
 - [x] Auto-stop scheduling
 - [x] Rich text log entries with versioning
 - [x] Image upload via Cloudflare R2
 - [x] Clerk authentication
 - [x] Dashboard with stats
 - [x] Dark mode
+- [x] AI-powered document summarization (rate-limited)
+- [x] Search, filter, and sort for documents and sessions
+- [x] Admin dashboard with per-user AI usage tracking
+- [x] In-app feedback system
 - [ ] PDF/DOCX export
 - [ ] Weekly/monthly summary reports
 - [ ] Analytics dashboard with charts
@@ -351,6 +320,7 @@ Distributed under the **MIT License**. See [LICENSE](LICENSE) for details.
 ## Acknowledgments
 
 - [Clerk](https://clerk.com/) for authentication
+- [Anthropic Claude](https://anthropic.com/) for AI summarization
 - [Cloudflare R2](https://developers.cloudflare.com/r2/) for object storage
 - [Tiptap](https://tiptap.dev/) for the rich text editor
 - [Supabase](https://supabase.com/) for managed PostgreSQL

@@ -56,7 +56,6 @@ export function Dashboard() {
         setSessions(sessionsData || [])
         setDocuments(documentsData || [])
       } catch (err) {
-        console.error('Failed to fetch dashboard data:', err)
         setError(err instanceof Error ? err.message : 'Failed to load dashboard data')
       } finally {
         setLoading(false)

@@ -1,14 +1,17 @@
 package middleware
 
 import (
+	"log"
 	"net/http"
 	"strings"
 
 	"log_book/internal/models"
+	"log_book/internal/repository"
 
 	"github.com/clerk/clerk-sdk-go/v2"
 	"github.com/clerk/clerk-sdk-go/v2/jwks"
 	"github.com/clerk/clerk-sdk-go/v2/jwt"
+	"github.com/clerk/clerk-sdk-go/v2/user"
 	"github.com/gin-gonic/gin"
 )
 
@@ -17,7 +20,7 @@ const (
 	ContextKeyUserID  = "user_id"
 )
 
-func AuthMiddleware() gin.HandlerFunc {
+func AuthMiddleware(userRepo *repository.UserRepository) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
@@ -31,8 +34,8 @@ func AuthMiddleware() gin.HandlerFunc {
 		}
 
 		// Extract Bearer token
-		parts := strings.Split(authHeader, " ")
-		if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
+		parts := strings.SplitN(authHeader, " ", 2)
+		if len(parts) != 2 || !strings.EqualFold(parts[0], "bearer") {
 			c.JSON(http.StatusUnauthorized, models.ErrorResponse(
 				models.ErrCodeUnauthorized,
 				"Invalid authorization header format",
@@ -49,7 +52,6 @@ func AuthMiddleware() gin.HandlerFunc {
 			Token: token,
 		})
 		if err != nil {
-			println("[AUTH DEBUG] Failed to decode token:", err.Error())
 			c.JSON(http.StatusUnauthorized, models.ErrorResponse(
 				models.ErrCodeUnauthorized,
 				"Invalid token format",
@@ -62,7 +64,6 @@ func AuthMiddleware() gin.HandlerFunc {
 		// Fetch JWKS from Clerk
 		jwkSet, err := jwks.Get(c.Request.Context(), &jwks.GetParams{})
 		if err != nil {
-			println("[AUTH DEBUG] Failed to fetch JWKS:", err.Error())
 			c.JSON(http.StatusUnauthorized, models.ErrorResponse(
 				models.ErrCodeUnauthorized,
 				"Failed to verify token",
@@ -81,7 +82,6 @@ func AuthMiddleware() gin.HandlerFunc {
 			}
 		}
 		if jwk == nil {
-			println("[AUTH DEBUG] No matching JWK found for kid:", unsafeClaims.KeyID)
 			c.JSON(http.StatusUnauthorized, models.ErrorResponse(
 				models.ErrCodeUnauthorized,
 				"Token signing key not found",
@@ -97,7 +97,6 @@ func AuthMiddleware() gin.HandlerFunc {
 			JWK:   jwk,
 		})
 		if err != nil {
-			println("[AUTH DEBUG] Token verification failed:", err.Error())
 			c.JSON(http.StatusUnauthorized, models.ErrorResponse(
 				models.ErrCodeUnauthorized,
 				"Invalid or expired token",
@@ -107,8 +106,72 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
+		// Sync user data
+		var email, name string
+
+		// Fetch user from Clerk API
+		u, err := user.Get(c.Request.Context(), claims.Subject)
+		if err == nil && u != nil {
+			// Extract primary email
+			if len(u.EmailAddresses) > 0 {
+				email = u.EmailAddresses[0].EmailAddress
+			}
+			if u.FirstName != nil {
+				name = *u.FirstName
+				if u.LastName != nil {
+					name += " " + *u.LastName
+				}
+			}
+		} else {
+			log.Printf("Failed to fetch user from Clerk: %v", err)
+		}
+
+		// Ensure user exists and is up to date
+		if _, err := userRepo.SyncUser(c.Request.Context(), claims.Subject, email, name); err != nil {
+			log.Printf("Failed to sync user: %v", err)
+		}
+
 		// Set clerk_id in context
 		c.Set(ContextKeyClerkID, claims.Subject)
+		c.Next()
+	}
+}
+
+// AdminMiddleware ensures the user has admin role
+func AdminMiddleware(userRepo *repository.UserRepository) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		clerkID := GetClerkID(c)
+		if clerkID == "" {
+			c.JSON(http.StatusUnauthorized, models.ErrorResponse(
+				models.ErrCodeUnauthorized,
+				"User not authenticated",
+				nil,
+			))
+			c.Abort()
+			return
+		}
+
+		user, err := userRepo.GetByClerkID(c.Request.Context(), clerkID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, models.ErrorResponse(
+				models.ErrCodeInternal,
+				"Failed to fetch user profile",
+				nil,
+			))
+			c.Abort()
+			return
+		}
+
+		if user.Role != "admin" {
+			c.JSON(http.StatusForbidden, models.ErrorResponse(
+				models.ErrCodeForbidden,
+				"Admin access required",
+				nil,
+			))
+			c.Abort()
+			return
+		}
+
 		c.Next()
 	}
 }
@@ -132,9 +195,7 @@ func GetUserID(c *gin.Context) string {
 // InitClerk initializes the Clerk SDK with the secret key
 func InitClerk(secretKey string) {
 	if secretKey == "" {
-		println("[AUTH DEBUG] WARNING: CLERK_SECRET_KEY is empty!")
-	} else {
-		println("[AUTH DEBUG] Clerk initialized with key:", secretKey[:15]+"...")
+		log.Println("WARNING: CLERK_SECRET_KEY is not set")
 	}
 	clerk.SetKey(secretKey)
 }

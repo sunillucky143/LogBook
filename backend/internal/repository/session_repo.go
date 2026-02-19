@@ -87,6 +87,21 @@ func (r *SessionRepository) GetActiveSession(ctx context.Context, userID uuid.UU
 	return &session, err
 }
 
+func (r *SessionRepository) HasSessionOnDate(ctx context.Context, userID uuid.UUID, date time.Time) (bool, error) {
+	startOfDay := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.UTC)
+	endOfDay := startOfDay.AddDate(0, 0, 1)
+
+	var count int
+	err := r.db.Pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM time_sessions
+		WHERE user_id = $1 AND start_time >= $2 AND start_time < $3
+	`, userID, startOfDay, endOfDay).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
 func (r *SessionRepository) Update(ctx context.Context, session *models.TimeSession) error {
 	query := `
 		UPDATE time_sessions
@@ -172,6 +187,10 @@ func (r *SessionRepository) ListByUser(ctx context.Context, userID uuid.UUID, pa
 		sessions = append(sessions, session)
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
 	return sessions, total, nil
 }
 
@@ -199,6 +218,10 @@ func (r *SessionRepository) GetDueScheduledSessions(ctx context.Context) ([]mode
 			return nil, err
 		}
 		sessions = append(sessions, session)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return sessions, nil

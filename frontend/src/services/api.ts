@@ -1,6 +1,9 @@
 import { useAuth } from '@clerk/clerk-react'
+import { useMemo } from 'react'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1'
+
+const REQUEST_TIMEOUT_MS = 30_000
 
 export class ApiError extends Error {
   constructor(
@@ -23,7 +26,7 @@ async function request<T>(
   options: RequestOptions = {},
   token?: string | null
 ): Promise<T> {
-  const { params, ...fetchOptions } = options
+  const { params, signal: externalSignal, ...fetchOptions } = options
 
   // Build URL with query params
   let url = `${API_BASE_URL}${endpoint}`
@@ -40,7 +43,6 @@ async function request<T>(
     }
   }
 
-  // Set headers
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   }
@@ -49,36 +51,53 @@ async function request<T>(
     headers['Authorization'] = `Bearer ${token}`
   }
 
-  const response = await fetch(url, {
-    ...fetchOptions,
-    headers,
-  })
+  // Timeout via AbortController (respect external signal if provided)
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
 
-  const data = await response.json()
-
-  if (!response.ok || !data.success) {
-    throw new ApiError(
-      response.status,
-      data.error?.code || 'UNKNOWN_ERROR',
-      data.error?.message || 'An unknown error occurred',
-      data.error?.details
-    )
+  if (externalSignal) {
+    externalSignal.addEventListener('abort', () => controller.abort())
   }
 
-  return data.data as T
+  try {
+    const response = await fetch(url, {
+      ...fetchOptions,
+      headers,
+      signal: controller.signal,
+    })
+
+    const data = await response.json()
+
+    if (!response.ok || !data.success) {
+      throw new ApiError(
+        response.status,
+        data.error?.code || 'UNKNOWN_ERROR',
+        data.error?.message || 'An unknown error occurred',
+        data.error?.details
+      )
+    }
+
+    return data.data as T
+  } catch (err) {
+    if (err instanceof ApiError) throw err
+    if ((err as Error).name === 'AbortError') {
+      throw new ApiError(0, 'TIMEOUT', 'Request timed out')
+    }
+    throw err
+  } finally {
+    clearTimeout(timeoutId)
+  }
 }
+
+
 
 // Hook to get authenticated API client
 export function useApi() {
-  const { getToken, isSignedIn } = useAuth()
+  const { getToken } = useAuth()
 
-  const api = {
+  const api = useMemo(() => ({
     async get<T>(endpoint: string, options?: RequestOptions): Promise<T> {
       const token = await getToken()
-      console.log('[API Debug] isSignedIn:', isSignedIn, 'hasToken:', !!token)
-      if (!token) {
-        console.warn('[API Debug] No token available - user may not be signed in')
-      }
       return request<T>(endpoint, { ...options, method: 'GET' }, token)
     },
 
@@ -104,14 +123,13 @@ export function useApi() {
       const token = await getToken()
       return request<T>(endpoint, { ...options, method: 'DELETE' }, token)
     },
-  }
+  }), [getToken])
 
   return api
 }
 
 // Type-safe API endpoints
 export const endpoints = {
-  // Time endpoints
   time: {
     start: '/time/start',
     stop: '/time/stop',
@@ -122,15 +140,15 @@ export const endpoints = {
     scheduleById: (id: string) => `/schedule/${id}`,
   },
 
-  // Document endpoints
   documents: {
     list: '/documents',
     create: '/documents',
     get: (id: string) => `/documents/${id}`,
     update: (id: string) => `/documents/${id}`,
+    summarize: '/documents/summarize',
+    quota: '/documents/summarize/quota',
   },
 
-  // Upload endpoints
   upload: {
     presign: '/upload/presign',
     confirm: '/upload/confirm',
@@ -138,9 +156,20 @@ export const endpoints = {
     media: (id: string) => `/media/${id}`,
   },
 
-  // Feedback endpoints
   feedback: {
     create: '/feedback',
     list: '/feedback',
+  },
+
+  admin: {
+    stats: '/admin/stats',
+    users: '/admin/users',
+    aiUsage: '/admin/ai-usage',
+    aiUsageUsers: '/admin/ai-usage/users',
+    feedback: '/admin/feedback',
+  },
+
+  auth: {
+    me: '/me',
   },
 }

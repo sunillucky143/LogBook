@@ -75,6 +75,12 @@ func (rl *RateLimiter) Allow(key string) bool {
 	}
 	valid := times[:0]
 	for _, t := range times {
+		if t.After(windowStart) {
+			valid = append(valid, t)
+		}
+	}
+
+	if len(valid) >= rl.limit {
 		rl.requests[key] = valid
 		return false
 	}

@@ -83,11 +83,9 @@ func (rl *RateLimiter) Allow(key string) bool {
 		}
 	}
 
-	rl.requests[key] = valid
-
-	if len(valid) < rl.limit {
-		rl.requests[key] = append(valid, now)
-		return true
+	if len(valid) >= rl.limit {
+		rl.requests[key] = valid
+		return false
 	}
 
 	return false

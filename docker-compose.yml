@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: logbook_app
+    restart: unless-stopped
+    environment:
+      - ENVIRONMENT=production
+      - PORT=8080
+      # Secrets should be passed via .env file
+      - DATABASE_URL=${DATABASE_URL}
+      - CLERK_SECRET_KEY=${CLERK_SECRET_KEY}
+      - CLERK_PUBLISHABLE_KEY=${CLERK_PUBLISHABLE_KEY}
+      - CLAUDE_API_KEY=${CLAUDE_API_KEY}
+      - ALLOWED_ORIGINS=https://${DOMAIN_NAME}
+    ports:
+      - "8080:8080"
+    networks:
+      - logbook_net
+
+  caddy:
+    image: caddy:latest
+    container_name: logbook_caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - ./frontend/dist:/srv
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+    networks:
+      - logbook_net
+
+volumes:
+  caddy_data:
+  caddy_config:
+
+networks:
+  logbook_net:
+    driver: bridge

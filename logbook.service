@@ -1,0 +1,24 @@
+[Unit]
+Description=LogBook Backend Service
+After=network.target
+
+[Service]
+# User to run the service
+User=ubuntu
+Group=ubuntu
+
+# Working directory (where .env file is located)
+WorkingDirectory=/home/ubuntu/logbook
+
+# Path to the executable
+ExecStart=/home/ubuntu/logbook/server
+
+# Environment variables can be loaded from .env if supported, 
+# or passed explicitly. Better to source .env in ExecStartPre or allow binary to load it.
+# This assumes the binary loads .env automatically from PWD.
+
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

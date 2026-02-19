@@ -42,6 +42,14 @@ func (s *DocumentService) CreateDocument(ctx context.Context, clerkID string, in
 	if input.SessionID != nil {
 		id, err := uuid.Parse(*input.SessionID)
 		if err == nil {
+			// Check if this session already has a document
+			exists, err := s.documentRepo.HasDocumentForSession(ctx, id)
+			if err != nil {
+				return nil, err
+			}
+			if exists {
+				return nil, ErrDocumentExists
+			}
 			sessionID = &id
 		}
 	}

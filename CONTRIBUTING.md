@@ -89,23 +89,23 @@ frontend/
 
 - Follow standard Go project layout
 - Business logic belongs in `services/`, database queries in `repository/`, HTTP handling in `handlers/`
-- Use meaningful error messages — never expose internal errors to clients
+- Use meaningful error messages - never expose internal errors to clients
 - All new endpoints must be authenticated via Clerk JWT middleware
-- Use parameterized queries — never concatenate SQL strings
+- Use parameterized queries - never concatenate SQL strings
 
 ### Frontend (TypeScript/React)
 
-- Use TypeScript strictly — no `any` types
+- Use TypeScript strictly - no `any` types
 - Components go in `components/`, pages in `pages/`, state in `stores/`
 - Use Tailwind CSS utility classes following the existing design system
 - Server state via TanStack Query, client state via Zustand
-- Use the `useApi()` hook for API calls — no raw `fetch`
+- Use the `useApi()` hook for API calls - no raw `fetch`
 
 ### General
 
 - Write clear, self-documenting code
 - Keep functions focused and small
-- Handle errors explicitly — don't swallow them silently
+- Handle errors explicitly - don't swallow them silently
 - Test your changes locally before submitting
 
 ## Submitting Changes
@@ -140,9 +140,9 @@ We follow [Conventional Commits](https://www.conventionalcommits.org/):
    cd frontend && npm run lint && npm run build
    ```
 3. **Push** your branch and open a Pull Request
-4. **Fill in the PR template** — describe what changed and why
+4. **Fill in the PR template** - describe what changed and why
 5. **Link related issues** using `Closes #123` in the PR description
-6. Wait for review — maintainers may request changes
+6. Wait for review - maintainers may request changes
 
 ### What Makes a Good PR
 
@@ -175,13 +175,13 @@ Look for issues labeled [`good first issue`](https://github.com/sunillucky143/Lo
 
 ## Areas Where We Need Help
 
-- **Testing** — Unit tests for backend services, component tests for frontend
-- **Export** — PDF and DOCX export of log entries and time summaries
-- **Accessibility** — WCAG compliance audit and improvements
-- **Mobile** — Responsive refinements and PWA support
-- **CI/CD** — GitHub Actions pipelines
-- **Documentation** — OpenAPI/Swagger specs, user guide
-- **i18n** — Internationalization support
+- **Testing** - Unit tests for backend services, component tests for frontend
+- **Export** - PDF and DOCX export of log entries and time summaries
+- **Accessibility** - WCAG compliance audit and improvements
+- **Mobile** - Responsive refinements and PWA support
+- **CI/CD** - GitHub Actions pipelines
+- **Documentation** - OpenAPI/Swagger specs, user guide
+- **i18n** - Internationalization support
 
 ## Questions?
 

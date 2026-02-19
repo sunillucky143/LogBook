@@ -171,7 +171,7 @@ Use the [Feature Request](https://github.com/sunillucky143/LogBook/issues/new?la
 
 ## Good First Issues
 
-Look for issues labeled [`good first issue`](https://github.com/sunillucky143/LogBook/labels/good%20first%20issue) — these are curated for new contributors.
+Look for issues labeled [`good first issue`](https://github.com/sunillucky143/LogBook/labels/good%20first%20issue) - these are curated for new contributors.
 
 ## Areas Where We Need Help
 

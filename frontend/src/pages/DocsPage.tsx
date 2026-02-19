@@ -899,7 +899,7 @@ export function DocsPage() {
     } else {
       document.documentElement.classList.remove('dark')
     }
-    try { localStorage.setItem('logbook-dark-mode', JSON.stringify(next)) } catch {}
+    try { localStorage.setItem('logbook-dark-mode', JSON.stringify(next)) } catch { }
   }, [isDarkMode])
 
   // Scroll spy: update activeItem based on scroll position
@@ -986,7 +986,7 @@ export function DocsPage() {
               </Link>
             ) : (
               <Link
-                to="/"
+                to="/sign-in"
                 className="ml-2 px-3 py-1.5 text-sm font-medium rounded-lg bg-primary-600 text-white hover:bg-primary-700 transition-colors"
               >
                 Sign In
@@ -1038,11 +1038,10 @@ export function DocsPage() {
                         <button
                           key={item.id}
                           onClick={() => scrollToItem(item.id)}
-                          className={`w-full text-left px-3 py-1.5 rounded-md text-sm transition-colors ${
-                            activeItem === item.id
+                          className={`w-full text-left px-3 py-1.5 rounded-md text-sm transition-colors ${activeItem === item.id
                               ? 'text-primary-600 dark:text-primary-400 font-medium bg-primary-50 dark:bg-primary-950/30'
                               : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800/50'
-                          }`}
+                            }`}
                         >
                           {item.title}
                         </button>

@@ -68,9 +68,13 @@ func (rl *RateLimiter) Allow(key string) bool {
 
 	now := time.Now()
 	windowStart := now.Add(-rl.window)
-
-	valid := rl.requests[key][:0]
-	for _, t := range rl.requests[key] {
+	times := rl.requests[key]
+	if times == nil {
+		rl.requests[key] = []time.Time{now}
+		return true
+	}
+	valid := times[:0]
+	for _, t := range times {
 		if t.After(windowStart) {
 			valid = append(valid, t)
 		}

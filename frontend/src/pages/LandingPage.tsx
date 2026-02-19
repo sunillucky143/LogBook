@@ -12,6 +12,9 @@ import {
     Cloud
 } from 'lucide-react'
 
+
+
+
 export function LandingPage() {
     const { isSignedIn } = useAuth()
 
@@ -24,10 +27,6 @@ export function LandingPage() {
 
             {/* ─── Hero Section ─── */}
             <header className="relative pt-32 pb-20 px-6 max-w-7xl mx-auto text-center z-10">
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-indigo-300 text-xs font-medium mb-8 backdrop-blur-sm">
-                    <span className="flex h-2 w-2 rounded-full bg-indigo-400 animate-pulse"></span>
-                    v1.0 Now Live
-                </div>
 
                 <h1 className="text-5xl md:text-7xl font-bold tracking-tight mb-8 bg-gradient-to-br from-white via-gray-200 to-gray-500 bg-clip-text text-transparent">
                     The Operating System<br />
@@ -40,13 +39,23 @@ export function LandingPage() {
                 </p>
 
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-24">
-                    <Link
-                        to={isSignedIn ? '/' : '/sign-in'}
-                        className="px-8 py-3.5 bg-white text-black hover:bg-gray-200 rounded-full font-semibold text-base transition-all hover:scale-105 active:scale-95 flex items-center gap-2 shadow-[0_0_20px_rgba(255,255,255,0.3)]"
-                    >
-                        Start Logging
-                        <ArrowRight className="w-4 h-4" />
-                    </Link>
+                    {isSignedIn ? (
+                        <Link
+                            to="/"
+                            className="px-8 py-3.5 bg-white text-black hover:bg-gray-200 rounded-full font-semibold text-base transition-all hover:scale-105 active:scale-95 flex items-center gap-2 shadow-[0_0_20px_rgba(255,255,255,0.3)]"
+                        >
+                            Go to Dashboard
+                            <ArrowRight className="w-4 h-4" />
+                        </Link>
+                    ) : (
+                        <Link
+                            to="/sign-in"
+                            className="px-8 py-3.5 bg-white text-black hover:bg-gray-200 rounded-full font-semibold text-base transition-all hover:scale-105 active:scale-95 flex items-center gap-2 shadow-[0_0_20px_rgba(255,255,255,0.3)]"
+                        >
+                            Start Logging
+                            <ArrowRight className="w-4 h-4" />
+                        </Link>
+                    )}
                     <Link
                         to="/docs"
                         className="px-8 py-3.5 bg-white/10 hover:bg-white/15 border border-white/10 text-white rounded-full font-semibold text-base transition-all hover:scale-105 active:scale-95 backdrop-blur-md"
@@ -54,6 +63,7 @@ export function LandingPage() {
                         View Documentation
                     </Link>
                 </div>
+
 
                 {/* ─── 3D Hero Visual / Chaos Slider ─── */}
                 <div className="relative max-w-5xl mx-auto h-[600px] rounded-2xl border border-white/10 shadow-2xl overflow-hidden bg-[#0A0A0A] group">

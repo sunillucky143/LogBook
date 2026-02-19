@@ -77,6 +77,7 @@
 }
 
 @layer components {
+
   /* Documentation prose styles */
   .prose-doc h3 {
     @apply text-lg font-semibold text-gray-900 dark:text-gray-100 mt-8 mb-3;
@@ -90,7 +91,8 @@
     @apply text-gray-600 dark:text-gray-400 mb-4 leading-relaxed;
   }
 
-  .prose-doc ul, .prose-doc ol {
+  .prose-doc ul,
+  .prose-doc ol {
     @apply text-gray-600 dark:text-gray-400 mb-4 pl-6 space-y-2;
   }
 
@@ -212,6 +214,7 @@
 }
 
 @layer utilities {
+
   /* Animation utilities */
   .animate-fade-in {
     animation: fadeIn 0.2s ease-out;
@@ -222,6 +225,7 @@
       opacity: 0;
       transform: translateY(-4px);
     }
+
     to {
       opacity: 1;
       transform: translateY(0);
@@ -237,6 +241,7 @@
       opacity: 0;
       transform: translateX(-10px);
     }
+
     to {
       opacity: 1;
       transform: translateX(0);
@@ -252,6 +257,7 @@
     from {
       transform: rotate(0deg);
     }
+
     to {
       transform: rotate(360deg);
     }
@@ -261,4 +267,11 @@
   .timer-display {
     font-variant-numeric: tabular-nums;
   }
+}
+
+/* Hide Clerk Development Badge */
+.cl-internal-b3fm6y,
+.cl-development-badge,
+.cl-internal-1fpq5at {
+  display: none !important;
 }

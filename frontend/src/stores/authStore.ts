@@ -28,7 +28,15 @@ export const useAuthStore = create<AuthState>((set) => ({
       set({ user, isLoading: false })
     } catch (err: any) {
       console.error('Failed to fetch user profile:', err)
-      set({ error: err.message, isLoading: false })
+      // Retry once after a short delay (handles race condition on new signups)
+      try {
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        const user = await api.get(endpoints.auth.me)
+        set({ user, isLoading: false, error: null })
+      } catch (retryErr: any) {
+        console.error('Retry failed:', retryErr)
+        set({ error: 'Unable to load your profile. Please refresh the page.', isLoading: false })
+      }
     }
   },
 }))
